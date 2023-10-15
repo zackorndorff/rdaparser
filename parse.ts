@@ -10,12 +10,12 @@ function debug(...args) {
 export class RDAFile {
     magic_bytes: string
     version: number
-    writer_version: array
-    min_reader_version: array
+    writer_version: RVersion
+    min_reader_version: RVersion
 
-    top_obj: any
+    top_obj: RDA_Item
 
-    ref_table: array
+    ref_table: Array<RDA_Item>
 }
 
 // src/include/Rinternals.h
@@ -182,9 +182,9 @@ export class RDA_Item_Flags {
 
     constructor(value: number) {
         this.value = value;
-        this.is_object = value & (1 << 8);
-        this.has_attr = value & (1 << 9);
-        this.has_tag = value & (1 << 10);
+        this.is_object = (value & (1 << 8)) !== 0;
+        this.has_attr = (value & (1 << 9)) !== 0;
+        this.has_tag = (value & (1 << 10)) !== 0;
         this.levels = value >> 12;
         this.type = value & 0xFF as SEXPTYPE;
         debug(`Found object of type ${SEXPTYPE[this.type]}`);
@@ -212,6 +212,7 @@ function parse_listsxp(view: DataView, offset: number, obj: RDAFile, flags: RDA_
 
     item.attrib = null;
     if (flags.has_attr) {
+        let attrib;
         ([offset, attrib] = parse_item(view, offset, obj));
         item.attrib = attrib;
     }
@@ -237,15 +238,16 @@ export class RDA_DataItem extends RDA_Item {
     s: any | null
 }
 
-function do_shared_parse(view: DataView, offset: number, obj: RDAFile, flags: RDA_Item_Flags, s: RDA_DataItem): [number, RDA_DataItem] {
+function do_shared_parse(view: DataView, offset: number, obj: RDAFile, flags: RDA_Item_Flags, s: any): [number, RDA_DataItem] {
     let item = new RDA_DataItem;
     item.tag = null;
     item.flags = flags;
     item.s = s;
 
     if (flags.type === SEXPTYPE.CHARSXP) {
-        // TODO: explain legacy behavior
-        if (flags.has_attr) ([offset, _] = parse_item(view, offset, obj));
+        // Apparently older versions of R had attributes here that are now stored elsewhere
+        // So we ignore them, as R does.
+        if (flags.has_attr) ([offset, ] = parse_item(view, offset, obj));
     } else {
         if (flags.has_attr) {
             let attrib;

@@ -1,4 +1,3 @@
-// I think this loads an R 'tibble', whatever that is
 import { RDAFile, SEXPTYPE, RDA_Item_Flags, RDA_Item, LISTSXP, RDA_DataItem } from './parse.ts';
 
 export class LoadError extends Error {}
@@ -30,15 +29,15 @@ export function load_top_list(file: RDAFile): any {
      * the top object to be a LISTSXP where each cons cell has a tag with a name
      */
 
-    walk_list(file.top_obj, (i, tag) => {
-        const s = expect_type(SEXPTYPE.CHARSXP, tag.s, "tibble tag symbol value").s;
+    walk_list(file.top_obj, (i: RDA_Item, tag) => {
+        const s = (expect_type(SEXPTYPE.CHARSXP, tag.s, "tibble tag symbol value") as RDA_DataItem).s;
         debug("parsing data named", s);
         top_level.set(s, load_item(i));
     });
     return top_level;
 }
 
-function load_item(obj) {
+function load_item(obj: RDA_Item) {
     const class_list = strsxp_to_array(get_attrib_by_name(obj.attrib, "class", false));
     debug("object has type", SEXPTYPE[obj.flags.type]);
     debug("object has class list:", class_list);
@@ -50,7 +49,7 @@ function load_item(obj) {
     throw new LoadError(`No load handler for object with types ${JSON.stringify(class_list)}`);
 }
 
-function load_data_frame(df: RDA_Item): map<string, any> {
+function load_data_frame(df: RDA_Item): Map<string, any> {
     /*
      *  data.frame structure is:
      *      attribute LISTSXP of attribs
@@ -67,16 +66,18 @@ function load_data_frame(df: RDA_Item): map<string, any> {
         names_attrib = get_attrib_by_name(df.attrib, "names", true);
     }
 
+    const names_item = expect_type(SEXPTYPE.STRSXP, names_attrib, "data.frame names attribute") as RDA_DataItem;
+
     let column_names = [];
-    for (let i = 0; i < names_attrib.s.length; i++) {
-        const cur_charsxp = expect_type(SEXPTYPE.CHARSXP, names_attrib.s[i], "tibble column names charsxp #${i}");
+    for (let i = 0; i < names_item.s.length; i++) {
+        const cur_charsxp = expect_type(SEXPTYPE.CHARSXP, names_item.s[i], "tibble column names charsxp #${i}") as RDA_DataItem;
         column_names.push(cur_charsxp.s);
     }
     debug("Found column names", column_names);
 
     // ignoring row.names for now, I just don't care yet
 
-    const main_vecsxp = expect_type(SEXPTYPE.VECSXP, df, "tibble data vecsxp");
+    const main_vecsxp = expect_type(SEXPTYPE.VECSXP, df, "tibble data vecsxp") as RDA_DataItem;
 
     //debug_print_attribs(main_vecsxp.attrib);
 
@@ -124,16 +125,18 @@ function load_data_frame(df: RDA_Item): map<string, any> {
     return data;
 }
 
-function walk_list(list: LISTSXP, callback): any {
-    if (list.flags.type !== SEXPTYPE.LISTSXP) {
-        throw new LoadError(`tried to walk list but type is ${SEXPTYPE[list.flags.type]} (${list.flags.type})`);
+function walk_list(maybe_list: RDA_Item, callback): any {
+    if (maybe_list.flags.type !== SEXPTYPE.LISTSXP) {
+        throw new LoadError(`tried to walk list but type is ${SEXPTYPE[maybe_list.flags.type]} (${maybe_list.flags.type})`);
     }
+    let list = maybe_list as LISTSXP
     // type of last cdr cell is NILVALUE_SXP
     while (list.flags.type === SEXPTYPE.LISTSXP) {
         let result = callback(list.car, list.tag);
         if (result !== undefined) {
             return result;
         } else {
+            // @ts-ignore
             list = list.cdr;
         }
     }
@@ -144,7 +147,7 @@ function debug_print_attribs(attrib_list: LISTSXP) {
     walk_list(attrib_list, (i, tag) => {
         switch (tag.flags.type) {
             case SEXPTYPE.SYMSXP:
-                let sym_str = expect_type(SEXPTYPE.CHARSXP, tag.s, "attrib sym value").s;
+                let sym_str = (expect_type(SEXPTYPE.CHARSXP, tag.s, "attrib sym value") as RDA_DataItem).s;
                 debug(`  SYM: ${sym_str}`, SEXPTYPE[i.flags.type]);
                 break;
             case SEXPTYPE.CHARSXP:
@@ -157,12 +160,12 @@ function debug_print_attribs(attrib_list: LISTSXP) {
     });
 }
 
-function get_attrib_by_name(attrib_list: LISTSXP, name: string, is_symbol: boolean): RDA_Item | undefined {
+function get_attrib_by_name(attrib_list: RDA_Item, name: string, is_symbol: boolean): RDA_Item | undefined {
     return walk_list(attrib_list, (i, tag) => {
         switch (tag.flags.type) {
             case SEXPTYPE.SYMSXP:
                 if (!is_symbol) return;
-                let sym_str = expect_type(SEXPTYPE.CHARSXP, tag.s, "attrib sym value");
+                let sym_str = expect_type(SEXPTYPE.CHARSXP, tag.s, "attrib sym value") as RDA_DataItem;
                 if (sym_str.s == name) return i;
                 break;
             case SEXPTYPE.CHARSXP:
@@ -173,7 +176,7 @@ function get_attrib_by_name(attrib_list: LISTSXP, name: string, is_symbol: boole
     });
 }
 
-function strsxp_to_array(list: RDA_Item): array {
-    list = expect_type(SEXPTYPE.STRSXP, list, "strsxp_to_array");
-    return list.s.map((i) => expect_type(SEXPTYPE.CHARSXP, i, "strsxp list member").s);
+function strsxp_to_array(list: RDA_Item): Array<string> {
+    let di_list = expect_type(SEXPTYPE.STRSXP, list, "strsxp_to_array") as RDA_DataItem;
+    return di_list.s.map((i) => (expect_type(SEXPTYPE.CHARSXP, i, "strsxp list member") as RDA_DataItem).s);
 }
