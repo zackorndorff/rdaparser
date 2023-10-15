@@ -6,4 +6,4 @@ of RDA.
 ## Hacking
 
 Type checking: `npx tsc --noEmit -p .`
-Run the basic test (given a data file): `deno run --allow-read=path/to/your/file.rda test.js path/to/your/file.rda`
+Run the basic test (given a data file): `deno run --allow-read=path/to/your/file.rda --allow-write=./out.csv test.js path/to/your/file.rda`
