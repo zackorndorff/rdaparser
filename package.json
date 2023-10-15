@@ -1,0 +1,12 @@
+{
+  "name": "rdaparser-zack",
+  "version": "0.0.1",
+  "description": "Parse R RDA files in the X binary format.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Zack Orndorff <github@zackorndorff.com>",
+  "license": "MIT",
+  "private": true
+}
