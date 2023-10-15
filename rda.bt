@@ -1,0 +1,250 @@
+//------------------------------------------------
+//--- 010 Editor v12.0.1 Binary Template
+//
+//      File: rda.bt
+//   Authors: Zack Orndorff https://zackorndorff.com
+//   Version: 0.0.1
+//   Purpose: Decode rda files (serialized R workspaces)
+//  Category: 
+// File Mask: 
+//  ID Bytes: RD
+//   History: 
+//------------------------------------------------
+
+BigEndian();
+
+enum <char> R_pstream_format_t {
+    ASCII = 'A',
+    BINARY = 'B',
+    XDR = 'X',
+};
+
+struct RDA_MAGIC_HEADER {
+    char magic[2];
+    R_pstream_format_t type; // A, B, X. Assuming X.
+    char version;
+    char newline;
+};
+
+struct R_Version_macro {
+    ubyte unused;
+    ubyte major;
+    ubyte minor;
+    ubyte patch;
+};
+
+struct RDA_Format {
+    RDA_MAGIC_HEADER magic_header;
+    R_pstream_format_t inner_representation;
+    char newline;
+};
+
+// src/include/Rinternals.h
+/*------ enum_SEXPTYPE ----- */
+enum <ubyte> SEXPTYPE {
+    NILSXP	= 0,	/* nil = NULL */
+    SYMSXP	= 1,	/* symbols */
+    LISTSXP	= 2,	/* lists of dotted pairs */
+    CLOSXP	= 3,	/* closures */
+    ENVSXP	= 4,	/* environments */
+    PROMSXP	= 5,	/* promises: [un]evaluated closure arguments */
+    LANGSXP	= 6,	/* language constructs (special lists) */
+    SPECIALSXP	= 7,	/* special forms */
+    BUILTINSXP	= 8,	/* builtin non-special forms */
+    CHARSXP	= 9,	/* "scalar" string type (internal only)*/
+    LGLSXP	= 10,	/* logical vectors */
+    INTSXP	= 13,	/* integer vectors */
+    REALSXP	= 14,	/* real variables */
+    CPLXSXP	= 15,	/* complex variables */
+    STRSXP	= 16,	/* string vectors */
+    DOTSXP	= 17,	/* dot-dot-dot object */
+    ANYSXP	= 18,	/* make "any" args work */
+    VECSXP	= 19,	/* generic vectors */
+    EXPRSXP	= 20,	/* expressions vectors */
+    BCODESXP	= 21,	/* byte code */
+    EXTPTRSXP	= 22,	/* external pointer */
+    WEAKREFSXP	= 23,	/* weak reference */
+    RAWSXP	= 24,	/* raw bytes */
+    S4SXP	= 25,	/* S4 non-vector */
+
+    NEWSXP      = 30,   /* fresh node created in new page */
+    FREESXP     = 31,   /* node released by GC */
+
+    FUNSXP	= 99,	/* Closure or Builtin */
+
+    /* "Administrative SXP values" from serialize.c */
+    REFSXP            = 255,
+    NILVALUE_SXP      = 254,
+    GLOBALENV_SXP     = 253,
+    UNBOUNDVALUE_SXP  = 252,
+    MISSINGARG_SXP    = 251,
+    BASENAMESPACE_SXP = 250,
+    NAMESPACESXP      = 249,
+    PACKAGESXP        = 248,
+    PERSISTSXP        = 247,
+    /* the following are speculative--we may or may not need them soon */
+    CLASSREFSXP       = 246,
+    GENERICREFSXP     = 245,
+    BCREPDEF          = 244,
+    BCREPREF          = 243,
+    EMPTYENV_SXP	  = 242,
+    BASEENV_SXP	  = 241,
+    
+    /* The following are needed to preserve attribute information on
+       expressions in the constant pool of byte code objects. This is
+       mainly for preserving source references attributes.  The original
+       implementation of the sharing-preserving writing and reading of byte
+       code objects did not account for the need to preserve attributes,
+       so there is now a work-around using these SXP types to flag when
+       the ATTRIB field has been written out. Object bits and S4 bits are
+       still not preserved.  In the long run it might be better to change
+       to a scheme in which all sharing is preserved and byte code objects
+       don't need to be handled as a special case.  LT */
+    ATTRLANGSXP       = 240,
+    ATTRLISTSXP       = 239,
+    
+    ALTREP_SXP	  = 238,
+};
+
+
+// See UnpackFlags
+struct item_flags {
+    union {
+        struct real_flags_t {
+            ubyte pad;
+            ushort LEVELS: 12;
+            ushort unused: 1;
+            ushort HAS_TAG : 1;
+            ushort HAS_ATTR : 1;
+            ushort IS_OBJECT : 1;
+            SEXPTYPE type;
+        } f;
+        local uint32 value;
+    } u;
+};
+
+int InRefIndex(item_flags &flags) {
+    local uint32 i = flags.u.value >> 8;
+    if ( i == -1) {
+        uint32 index;
+        return index;
+    }
+    return i;
+}
+
+struct RDA_Item;
+
+string ReadCHARSXP(RDA_Item &item) {
+    if (item.flags.u.f.type == CHARSXP) {
+        if (item.charsxp.length != -1) return item.charsxp.char_s;
+        else return "NA_STRING";
+    }
+    return "idk";
+}
+
+// See ReadItem
+struct RDA_Item {
+    item_flags flags <read=(EnumToString(u.f.type))>;
+    switch (flags.u.f.type) {
+        case NILVALUE_SXP://      return R_NilValue;
+        case EMPTYENV_SXP://	    return R_EmptyEnv;
+        case BASEENV_SXP://	    return R_BaseEnv;
+        case GLOBALENV_SXP://     return R_GlobalEnv;
+        case UNBOUNDVALUE_SXP://  return R_UnboundValue;
+        case MISSINGARG_SXP://    return R_MissingArg;
+            break;
+        case REFSXP:
+            // oh no
+            local uint32 index = InRefIndex(flags);
+            break;
+        case SYMSXP:
+            struct SYMSXP {
+                RDA_Item sym_s;
+            } symsxp;
+            break;
+        case LISTSXP:
+            if (flags.u.f.HAS_ATTR) {
+                RDA_Item attrib <open=true>;
+            }
+            if (flags.u.f.HAS_TAG) {
+                RDA_Item tag <open=true>;
+            }
+            // if tag was symbol, we should set_lastname = TRUE, which sets lastname to <unknown>?
+            RDA_Item car <open=true>;
+            RDA_Item cdr <open=true>;
+            break;
+        default:
+            // the original code uses this switch to jump to the bottom to fill in shared attributes
+            // They should have just used "goto" but they didn't.
+            /* These break out of the switch to have their ATTR,
+               LEVELS, and OBJECT fields filled in.  Each leaves the
+               newly allocated value PROTECTed */
+            switch (flags.u.f.type) {
+            case CHARSXP:
+                struct CHARSXP_t {
+                    uint32 length;
+                    if (length != -1) { // NA_STRING
+                        char char_s[length];
+                    }
+                } charsxp <read=(char_s)>;
+                break;
+            case VECSXP:
+                struct VECSXP_t {
+                    uint32 length; // TODO: if == -1, see LONG_VECTOR_SUPPORT
+                    RDA_Item vec_items[length] <optimize=false>;
+                } vecsxp;
+                break;
+            case STRSXP:
+                struct STRSXP_t {
+                    uint32 length; // TODO LONG_VECTOR_SUPPORT;
+                    RDA_Item str_items[length] <optimize=false,read=(ReadCHARSXP(this))>;
+                } strsxp;
+                break;
+            case INTSXP:
+            case LGLSXP:
+                struct RDA_IntegerVec {
+                    uint32 length;
+                    // InIntegerVec
+                    uint32 intvec_items[length]; // maybe
+                } intvec;
+                break;
+            case REALSXP:
+                struct RDA_RealVec {
+                    uint32 length;
+                    // InRealVec
+                    double realvec_items[length]; // maybe
+                } realvec;
+                break;
+            default:
+                Printf("Unknown RDA_Item type %d at %x\n", flags.u.f.type, startof(this) );
+                Warning("bad");
+                return "failed\n";
+                break;
+            }; // end inner switch
+            // common code to the inner switch block here
+            // if type not CHARSXP set levels
+            // set_object (whatever that is)
+            if ( (flags.u.f.type) == CHARSXP) {
+                if (flags.u.f.HAS_ATTR) {
+                    struct RDA_Item throwaway_legacy_attribs <open=true>;
+                }
+            } else {
+                if (flags.u.f.HAS_ATTR) {
+                    struct RDA_Item attrib <open=true>;
+                }
+            }
+    };
+};
+
+
+RDA_Format format;
+uint32 version;
+R_Version_macro writer_version <format=hex>;
+R_Version_macro min_reader_version;
+
+if (version == 3) {
+    // TODO: read encoding type string?
+}
+
+RDA_Item top_item <open=true>;
+

@@ -8,5 +8,6 @@
   },
   "author": "Zack Orndorff <github@zackorndorff.com>",
   "license": "MIT",
+  "type": "module",
   "private": true
 }
