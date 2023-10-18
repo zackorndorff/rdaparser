@@ -274,6 +274,7 @@ function parse_refsxp(view: DataView, offset: number, obj: RDAFile, flags: RDA_I
     return [offset, item];
 }
 
+let text_decoder = new TextDecoder('utf-8');
 function parse_item(view: DataView, offset: number, obj: RDAFile): [number, RDA_Item] {
     const flags_int = view.getUint32(offset, false); offset += 4;
     let flags = new RDA_Item_Flags(flags_int);
@@ -311,13 +312,9 @@ function parse_item(view: DataView, offset: number, obj: RDAFile): [number, RDA_
         case SEXPTYPE.CHARSXP:
         {
             let length = view.getInt32(offset, false); offset += 4;
-            let s = null;
+            let s;
             if (length !== -1) {
-                let chars = [];
-                for (let i = 0; i < length; i++) {
-                    chars.push(String.fromCharCode(view.getUint8(offset++)));
-                }
-                s = chars.join('');
+                s = text_decoder.decode(view.buffer.slice(offset, offset+length)); offset += length;
             }
             return do_shared_parse(view, offset, obj, flags, s);
         }
@@ -337,19 +334,17 @@ function parse_item(view: DataView, offset: number, obj: RDAFile): [number, RDA_
         case SEXPTYPE.LGLSXP: // TODO: disambiguate
         {
             let length = view.getInt32(offset, false); offset += 4;
-            let s = [];
-            for (let i = 0; i < length; i++) {
-                s.push(view.getUint32(offset, false)); offset += 4;
-            }
+            let arr = new Uint32Array(view.buffer.slice(offset, offset + length*4));
+            offset += length*4;
+            let s = Array.from(arr);
             return do_shared_parse(view, offset, obj, flags, s);
         }
         case SEXPTYPE.REALSXP:
         {
             let length = view.getInt32(offset, false); offset += 4;
-            let s = [];
-            for (let i = 0; i < length; i++) {
-                s.push(view.getFloat64(offset)); offset += 8;
-            }
+            let arr = new Float64Array(view.buffer.slice(offset, offset + length*8));
+            offset += length*8;
+            let s = Array.from(arr);
             return do_shared_parse(view, offset, obj, flags, s);
         }
         default:
