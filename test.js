@@ -1,6 +1,6 @@
 import {argv, exit, stdout} from "node:process";
 import * as fs from "node:fs/promises";
-import { parse, load_top_list } from "./index.ts";
+import { parse, load_top_list } from "./index.js";
 
 if (argv[2] === undefined) {
     console.log("you must specify a .rda file to parse");

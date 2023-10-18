@@ -1,4 +1,4 @@
-import { RDAFile, SEXPTYPE, RDA_Item_Flags, RDA_Item, LISTSXP, RDA_DataItem } from './parse.ts';
+import { RDAFile, SEXPTYPE, RDA_Item_Flags, RDA_Item, LISTSXP, RDA_DataItem } from './parse.js';
 
 export class LoadError extends Error {}
 
@@ -20,7 +20,7 @@ const HANDLER_TABLE = {
     "data.frame": load_data_frame,
 }
 
-export function load_top_list(file: RDAFile): any {
+export function load_top_list(file: RDAFile): Map<string, any> {
     let top_level = new Map();
     debug("loading data");
 
@@ -49,7 +49,7 @@ function load_item(obj: RDA_Item) {
     throw new LoadError(`No load handler for object with types ${JSON.stringify(class_list)}`);
 }
 
-function load_data_frame(df: RDA_Item): Map<string, any> {
+function load_data_frame(df: RDA_Item): Map<string, Array<any>> {
     /*
      *  data.frame structure is:
      *      attribute LISTSXP of attribs
