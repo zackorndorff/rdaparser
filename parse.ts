@@ -344,9 +344,10 @@ function parse_item(view: DataView, offset: number, obj: RDAFile): [number, RDA_
         case SEXPTYPE.REALSXP:
         {
             let length = view.getInt32(offset, false); offset += 4;
-            let arr = new Float64Array(view.buffer.slice(offset, offset + length*8));
-            offset += length*8;
-            let s = Array.from(arr);
+            let s = [];
+            for (let i = 0; i < length; i++) {
+                s.push(view.getFloat64(offset)); offset += 8;
+            }
             return do_shared_parse(view, offset, obj, flags, s);
         }
         default:
