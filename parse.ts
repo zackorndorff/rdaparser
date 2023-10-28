@@ -334,9 +334,11 @@ function parse_item(view: DataView, offset: number, obj: RDAFile): [number, RDA_
         case SEXPTYPE.LGLSXP: // TODO: disambiguate
         {
             let length = view.getInt32(offset, false); offset += 4;
-            let arr = new Uint32Array(view.buffer.slice(offset, offset + length*4));
-            offset += length*4;
-            let s = Array.from(arr);
+            let s = [];
+            for (let i = 0; i < length; i++) {
+                // Values are big-endian; we cannot optimize with a Uint32Array.
+                s.push(view.getInt32(offset, false)); offset += 4;
+            }
             return do_shared_parse(view, offset, obj, flags, s);
         }
         case SEXPTYPE.REALSXP:
