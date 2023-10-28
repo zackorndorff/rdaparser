@@ -20,6 +20,10 @@ const HANDLER_TABLE = {
     "data.frame": load_data_frame,
 }
 
+const ITEM_HANDLER_TABLE = {
+    "Date": load_date,
+}
+
 export function load_top_list(file: RDAFile): Map<string, any> {
     let top_level = new Map();
     debug("loading data");
@@ -47,6 +51,22 @@ function load_item(obj: RDA_Item) {
         }
     }
     throw new LoadError(`No load handler for object with types ${JSON.stringify(class_list)}`);
+}
+
+function load_date(date_num): Date {
+    // "R stores dates from an origin of 1st January, 1970."
+    // "Thus, if you run as.numeric(as.Date("1970-01-01)) you will get 0."
+    // https://epirhandbook.com/en/working-with-dates.html#excel-dates
+    const MS = 1;
+    const SECOND = 1000 * MS;
+    const MINUTE = SECOND * 60;
+    const HOUR = MINUTE * 60;
+    const DAY = HOUR * 24;
+    if (!isNaN(date_num)) {
+        return new Date(date_num * DAY);
+    } else {
+        return null;
+    }
 }
 
 function load_data_frame(df: RDA_Item): Map<string, Array<any>> {
@@ -89,13 +109,7 @@ function load_data_frame(df: RDA_Item): Map<string, Array<any>> {
         debug(`Loading column ${column_idx} "${column_name}"`);
         let col = main_vecsxp.s[column_idx];
         let col_data = [];
-        if (col.flags.type !== SEXPTYPE.VECSXP) {
-            if (col.hasOwnProperty("attrib") && col.attrib !== undefined && get_attrib_by_name(col.attrib, "class", false) !== undefined) {
-                let class_list = strsxp_to_array(get_attrib_by_name(col.attrib, "class", false));
-                // TODO better message
-                console.log("WARNING: thing had class and we didn't expect it to", class_list);
-            }
-        }
+
         switch (col.flags.type) {
             case SEXPTYPE.STRSXP:
             {
@@ -120,6 +134,37 @@ function load_data_frame(df: RDA_Item): Map<string, Array<any>> {
                 throw new LoadError(`Found unhandled column type ${SEXPTYPE[col.flags.type]} (${col.flags.type}) while loading column ${column_idx} "${column_name}"`);
                 break;
         }
+
+        let class_list = null;
+        if (col.hasOwnProperty("attrib") && col.attrib !== undefined) {
+            // Sometimes it's a symbol and sometimes it's not.
+            let class_attrib = get_attrib_by_name(col.attrib, "class", false);
+            if (class_attrib === undefined) {
+                class_attrib = get_attrib_by_name(col.attrib, "class", true);
+            }
+
+            if (class_attrib !== undefined) {
+                class_list = strsxp_to_array(class_attrib);
+            }
+        }
+
+        // If the column has a class, then process the raw data with the class's
+        // handler.
+        if (class_list !== null) {
+            let handled = false;
+            for (let klass of class_list) {
+                if (ITEM_HANDLER_TABLE.hasOwnProperty(klass)) {
+                    const handler = ITEM_HANDLER_TABLE[klass];
+                    col_data = col_data.map((i) => handler(i));
+                    handled = true;
+                    break;
+                }
+            }
+            if (!handled) {
+                console.log(`WARNING: column ${column_name} had unhandled class ${class_list}`);
+            }
+        }
+
         data.set(column_name, col_data);
     }
     return data;
