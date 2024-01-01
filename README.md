@@ -38,9 +38,9 @@ const loaded = load_top_list(parsed);
 
 ## Hacking
 
-Type checking: `npx tsc --noEmit -p .`
-Run the basic test (given a data file): `deno run --allow-read=path/to/your/file.rda --allow-write=./out.csv test.js path/to/your/file.rda`
-Or with node: `npx tsc && node test.js path/to/your/file.rda`
+Type checking: `npx tsc --noEmit -p .`  
+Run the basic test (given a data file): `deno run --allow-read=path/to/your/file.rda --allow-write=./out.csv test.js path/to/your/file.rda`  
+Or with node: `npx tsc && node test.js path/to/your/file.rda`  
 
 ## License
 
